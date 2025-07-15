@@ -6,56 +6,60 @@ import cv2
 import tempfile
 import os
 
+# Streamlit page config
 st.set_page_config(page_title="Car Damage Detection", layout="centered")
 
+# Title and Description
 st.title("🚗 Car Damage Detection using YOLOv8")
 st.markdown(
     """
-    Upload a car image, and this app will detect whether the car is **damaged** or **whole**, 
-    using a trained YOLOv8 model.
+    This app uses a custom-trained [YOLOv8](https://github.com/ultralytics/ultralytics) model to detect 
+    whether a car is **damaged** or **whole**. Upload an image of a vehicle and let AI do the inspection.
     """
 )
 
-# Load YOLOv8 model (ensure best.pt is in the same folder)
+# Load YOLOv8 model
 @st.cache_resource
 def load_model():
-    model_path = "best.pt"  # Replace with the full path if needed
+    model_path = "best.pt"  # Must be in same directory as app.py
     if not os.path.exists(model_path):
-        st.error("Model file not found. Please place 'best.pt' in the same folder as app.py.")
+        st.error("❌ Model file not found! Please upload your trained best.pt in the project directory.")
         return None
     return YOLO(model_path)
 
 model = load_model()
 
-# File uploader
-uploaded_file = st.file_uploader("Upload a car image", type=["jpg", "jpeg", "png"])
+# Upload image
+uploaded_file = st.file_uploader("📤 Upload a car image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None and model:
-    # Save to a temporary location
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-        tmp_file.write(uploaded_file.read())
-        tmp_path = tmp_file.name
+    # Show uploaded image
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    st.image(tmp_path, caption="Uploaded Image", use_column_width=True)
+    # Save temp file for YOLOv8
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        tmp.write(uploaded_file.read())
+        tmp_path = tmp.name
 
     # Inference
-    with st.spinner("Analyzing image..."):
+    with st.spinner("🔍 Detecting damage..."):
         results = model.predict(source=tmp_path, imgsz=640, conf=0.25)
 
-    # Get results
+    # Render result
     res_img = results[0].plot()
-    st.image(res_img, caption="Prediction Result", use_column_width=True)
+    st.image(res_img, caption="🔎 Detection Result", use_column_width=True)
 
-    # Display detected classes
-    st.markdown("### Detected Objects:")
-    boxes = results[0].boxes
-    names = results[0].names
-    for box in boxes:
+    # Detection info
+    st.markdown("### 📋 Detected Classes:")
+    for box in results[0].boxes:
         cls_id = int(box.cls[0])
         conf = float(box.conf[0])
-        st.write(f"**{names[cls_id]}** - Confidence: `{conf:.2f}`")
+        label = results[0].names[cls_id]
+        st.write(f"• **{label}** — Confidence: `{conf:.2f}`")
 
-    # Optional: Show coordinates
-    if st.checkbox("Show bounding box coordinates"):
-        for i, box in enumerate(boxes.xyxy):
-            st.write(f"Box {i+1}: {box.tolist()}")
+    # Optional: Bounding box data
+    if st.checkbox("📐 Show Bounding Box Coordinates"):
+        for i, box in enumerate(results[0].boxes.xyxy):
+            st.write(f"Box {i+1}: `{box.tolist()}`")
+
